@@ -29,7 +29,7 @@ private:
 	int featureMinNumRect;
 	int featureMaxNumRect;
 	int featureNum;
-	vector<vector<Rect>> features;
+	vector<vector<Rect_<float>>> features;
 	vector<vector<float>> featuresWeight;
 	int rOuterPositive;
 	vector<Rect> samplePositiveBox;
@@ -58,4 +58,19 @@ private:
 public:
 	void processFrame(Mat& _frame, Rect& _objectBox);
 	void init(Mat& _frame, Rect& _objectBox);
+
+private:
+	int rFineSearchWindow;
+	void sampleRectDet(Mat& _image, Rect& _objectBox, float _rInner, int _step, vector<Rect>& _sampleBox);
+public:
+	void processFrame_fct(Mat& _frame, Rect& _objectBox);
+	void init_fct(Mat& _frame, Rect& _objectBox);
+	
+	void processFrame_sfct(Mat& _frame, Rect& _objectBox);
+
+	vector<float> scales;
+	void setFeatures(float s);
+	void resetFeatures(float s);
+	void printFeatures();
+	void InitScales(int scalenum, float st, float en);
 };

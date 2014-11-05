@@ -27,14 +27,26 @@
 using namespace cv;
 using namespace std;
 
+//const string videoPath = "D:\\MyData\\sequences\\ProcessedVideo\\40_100.wmv";
+//const string locationPath = "D:\\MyData\\sequences\\ProcessedVideo\\40_100_locations.txt";
+
+//const string videoPath = "D:\\MyData\\sequences\\ProcessedVideo\\222_251.wmv";
+//const string locationPath = "D:\\MyData\\sequences\\ProcessedVideo\\222_251_locations.txt";
+
+//const string videoPath = "D:\\MyData\\sequences\\ProcessedVideo\\kobe.avi";
+//const string locationPath = "D:\\MyData\\sequences\\ProcessedVideo\\location.txt";
+
+const string videoPath = "D:\\MyData\\sequences\\videos\\test_input_opencv_short.wmv"; //
+const string locationPath = "D:\\MyData\\sequences\\videos\\locations.txt";
+
 
 
 const int nDataUsed = 0; //使用的数据集，0-original 1-Dataset from CAVIAR
 
 bool readLocation(string locationPath, vector<vector<Rect> > &vR);
 void drawLocation(const int fIdx, Mat& img, const vector<vector<Rect> > &vR);
-int frameIndex = 0;
-
+int frameIndex = -1;
+int stopIndex = 800; //570: 40_100
 
 
 int main(int argc, char* argv[])
@@ -53,8 +65,8 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	//bool useCamera = (conf.sequenceName == "");
-	bool useCamera = true;
+	bool useCamera = (conf.sequenceName == "");
+	//bool useCamera = true;
 
 	VideoCapture cap;
 
@@ -65,24 +77,23 @@ int main(int argc, char* argv[])
 
 	if (useCamera)
 	{
-		//TODO
 		cout << "Use The Camere" << endl;
 
 		vector<vector<Rect>> vLocations;
 
 		//cap.open(0);// open the camera
-		cap.open("D:\\MyData\\sequences\\ProcessedVideo\\kobe.avi"); //use the video
-		if (!readLocation("D:\\MyData\\sequences\\ProcessedVideo\\location.txt", vLocations))
+		cap.open(videoPath); //use the video
+		if (!cap.isOpened())
+		{
+			cout << "error:could not open the camere" << endl;
+		}
+
+		if (!readLocation(locationPath, vLocations))
 		{
 			return EXIT_FAILURE;
 		}
 
 		
-
-		if (!cap.isOpened())
-		{
-			cout << "error:could not open the camere" << endl;
-		}
 
 
 		Mat frame, grayImg, result;
@@ -90,10 +101,32 @@ int main(int argc, char* argv[])
 		//CompressiveTracker ct;
 		vector<CompressiveTracker> cts;
 
+
+		//while (frameIndex<3160)
+		//{
+		//	cap >> frame;
+		//	cout << frameIndex << endl;
+		//	frameIndex++;
+		//}
+
+
+		cap >> frame;
+		frameIndex++;
+		if (frame.empty())
+		{
+			cout << "error:failed to read the camera buffer " << endl;
+			return EXIT_FAILURE;
+		}
+
+
+		VideoWriter video_writer("Output.avi", CV_FOURCC('M', 'J', 'P', 'G'), 25.0, Size(frame.cols, frame.rows));// write video
+		char strFrame[256];
+
 		vector<Rect> vbox;
 		bool havedrawn = false;
 		bool stop = false;
-		while (1)
+
+		while (!frame.empty() && frameIndex<stopIndex)
 		{
 
 			if (stop)
@@ -104,12 +137,17 @@ int main(int argc, char* argv[])
 				if (frame.empty())
 				{
 					cout << "error:failed to read the camera buffer " << endl;
-					return EXIT_FAILURE;
+					break;
 				}
 				cvtColor(frame, grayImg, CV_RGB2GRAY);
 
 				MouseCapture MC("CT", frame);
-				havedrawn=MC.drawRect();
+
+				havedrawn = MC.drawRect();// draw
+				//MC.vrect.push_back(Rect(392, 64, 439 - 392, 111 - 64)); //45
+				//havedrawn = true;
+				//MC.vrect.push_back(Rect(506, 109, 544 - 506, 147 - 109)); //498
+				//havedrawn = true;
 
 				for (int i = 0; i < MC.vrect.size(); i++)
 				{
@@ -121,18 +159,23 @@ int main(int argc, char* argv[])
 
 				for (int i = 0; i < MC.vrect.size(); i++)
 				{
-					cts.at(i).init(grayImg, MC.vrect.at(i));
+					//cts.at(i).init(grayImg, MC.vrect.at(i));
+					cts.at(i).init_fct(grayImg, MC.vrect.at(i));
 					vbox.push_back(Rect(MC.vrect.at(i)));
 				}
 
 				stop = false;
 			}
 
+
 			cap >> frame;
+			frameIndex++;
+			cout << frameIndex << endl;
+
 			if (frame.empty())
 			{
 				cout << "error:failed to read the camera buffer " << endl;
-				return EXIT_FAILURE;
+				break;
 			}
 
 
@@ -141,31 +184,45 @@ int main(int argc, char* argv[])
 				if (frame.empty())
 				{
 					cout << "error:failed to read the camera buffer " << endl;
-					return EXIT_FAILURE;
+					break;
 				}
 
 				cvtColor(frame, grayImg, CV_RGB2GRAY);
 
 				for (int i = 0; i < cts.size(); i++)
 				{
-					cts.at(i).processFrame(grayImg, vbox.at(i));
+					double t = (double)cvGetTickCount();
+
+					//cts.at(i).processFrame(grayImg, vbox.at(i));
+					//cts.at(i).processFrame_fct(grayImg, vbox.at(i));
+					cts.at(i).processFrame_sfct(grayImg, vbox.at(i));
+
+					t = (double)cvGetTickCount() - t;
+					printf("%.5f second, %.5f fps\n", t / (cvGetTickFrequency()*1000000.), 1 / (t / (cvGetTickFrequency()*1000000.)));
+
 					rectangle(frame, vbox.at(i), Scalar(200, 0, 0), 2);// Draw rectangle
-					outFile << i<<": "<<(int)vbox.at(i).x << " " << (int)vbox.at(i).y << " " << (int)vbox.at(i).width << " " << (int)vbox.at(i).height << endl;
+					//cout << i<<": "<<(int)vbox.at(i).x << " " << (int)vbox.at(i).y << " " << (int)vbox.at(i).width << " " << (int)vbox.at(i).height << endl;
+				    //outFile<<
 				}
 
 				
 			}
 
-			drawLocation(frameIndex, frame, vLocations);
-			imshow("CT", frame);// Display
 
-			if (waitKey(1*int(!havedrawn)) == 's')
+			sprintf(strFrame, "#%d", frameIndex);
+			cv::putText(frame, strFrame, cv::Point(0, 20), 2, 1, CV_RGB(25, 200, 25));
+
+			drawLocation(frameIndex, frame, vLocations); //draw the detection results
+			imshow("CT", frame);// Display
+			video_writer << frame;
+
+
+			if (waitKey(1 * int(!havedrawn)) == 's' || frameIndex == 15)//3177
+			//if (waitKey(1) == 's' || frameIndex == 18)
 			{
 				stop = true;
 			}
 
-
-			frameIndex++;
 		}
 
 	}
@@ -227,7 +284,8 @@ int main(int argc, char* argv[])
 		sprintf(imgPath, imgFormat.c_str(), startFrame);
 		frame = cv::imread(imgPath, 1);
 		cvtColor(frame, grayImg, CV_RGB2GRAY);
-		ct.init(grayImg, box);
+		//ct.init(grayImg, box);
+		ct.init_fct(grayImg, box);
 
 		outFile << (int)box.x << " " << (int)box.y << " " << (int)box.width << " " << (int)box.height << endl;
 
@@ -246,7 +304,8 @@ int main(int argc, char* argv[])
 
 			cvtColor(frame, grayImg, CV_RGB2GRAY);
 
-			ct.processFrame(grayImg, box);// Process frame
+			//ct.processFrame(grayImg, box);// Process frame
+			ct.processFrame_sfct(grayImg, box);// Process frame
 
 			rectangle(frame, box, Scalar(200, 0, 0), 2);// Draw rectangle
 
